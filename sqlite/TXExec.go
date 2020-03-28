@@ -5,15 +5,18 @@ import (
 	"library/databases"
 )
 
+type datasetsMap map[string]databases.HandleDataset
+
 type TXExec struct {
 	db *sql.DB
 	tx *sql.Tx
-	datasets map[string]databases.HandleDataset
+	datasets datasetsMap
 }
 
 func (this *TXExec) Start(config Config) *TXExec {
 	this.db = config.getDb()
 	this.tx,_ = this.db.Begin()
+	this.datasets = make(datasetsMap)
 	return this
 }
 
@@ -25,8 +28,13 @@ func (this *TXExec) Rollback()  {
 	this.tx.Rollback()
 }
 
-func (this *TXExec) Add(tableName string,dataset databases.HandleDataset) databases.HandleTXExec {
-	this.datasets[tableName].SetDatasetTXExec(new(TXExec))
-	this.datasets[tableName] = dataset
+func (this *TXExec) Add(table *Connect) *TXExec {
+	var tableName = table.GetTableName()
+	this.datasets[tableName] = table.GetDataset()
+	this.datasets[tableName].SetDatasetTXExec(this)
 	return this
+}
+
+func (this *TXExec) GetTx() *sql.Tx {
+	return this.tx
 }

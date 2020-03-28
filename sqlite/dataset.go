@@ -114,7 +114,7 @@ func (this *Dataset) SetExec(sqlString string,placeholder []string) (result sql.
 		p[k] = v
 	}
 	if this.TXExec != nil {
-		begin,_ := this.db.Begin()
+		begin := this.TXExec.GetTx()
 		result,err = begin.Exec(sqlString,p...)
 	}else{
 		result,err = this.db.Exec(sqlString,p...)

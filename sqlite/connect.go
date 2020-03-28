@@ -126,9 +126,19 @@ func (this *Connect) Insert(template databases.DataTemplate) error {
 	var values []string
 
 	for k,v := range template{
+
+		var value string
+		switch v.(type) {
+		case int:
+			value = fmt.Sprintf("%d",v)
+		default:
+			value = fmt.Sprintf("%s",v)
+		}
+
 		fields = append(fields, fmt.Sprintf("`%s`",k))
 		places = append(places, "?")
-		values = append(values, reflect.ValueOf(v).String())
+		values = append(values, value)
+
 	}
 
 	sqlString = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",this.GetTableName(),strings.Join(fields,","),strings.Join(places,","))

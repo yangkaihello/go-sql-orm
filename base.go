@@ -46,15 +46,12 @@ func (this *Where) Where(where []WhereOperation,option string) *Where {
 	return this
 }
 
+func (this *Where) WhereAnd(where []WhereOperation) *Where {
+	return this.Where(where,DATABASE_WHERE_HANDLE_AND)
+}
+
 func (this *Where) WhereOr(where []WhereOperation) *Where {
-	var option = DATABASE_WHERE_HANDLE_OR
-	var whereString []string
-	for _,value := range where {
-		whereString = append(whereString,fmt.Sprintf("`%s` %s ?",strings.Trim(value.Key,""),strings.Trim(value.Handle,"")))
-		this.Placeholder = append(this.Placeholder,value.Value)
-	}
-	this.WhereString = append(this.WhereString,strings.Join(whereString," "+option+" "))
-	return this
+	return this.Where(where,DATABASE_WHERE_HANDLE_OR)
 }
 
 func (this *Where) Clean(option []string) (*Where , error) {
@@ -72,7 +69,7 @@ func (this *Where) Clean(option []string) (*Where , error) {
 }
 
 type HandleTXExec interface {
-	Add(tableName string,dataset HandleDataset) HandleTXExec
+	GetTx() *sql.Tx
 }
 
 type HandleDataset interface {
