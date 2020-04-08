@@ -2,7 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
-	"library/databases"
+	"github.com/yangkaihello/go-sql-orm"
 )
 
 type Dataset struct {

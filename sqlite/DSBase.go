@@ -2,7 +2,7 @@ package sqlite
 
 import (
 	"fmt"
-	"library/databases"
+	"github.com/yangkaihello/go-sql-orm"
 	"strings"
 )
 

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"library/databases"
-	"library/databases/factory"
+	"github.com/yangkaihello/go-sql-orm"
+	"github.com/yangkaihello/go-sql-orm/factory"
 	"reflect"
 	"strings"
 )
