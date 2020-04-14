@@ -1,7 +1,7 @@
 package factory
 
 import (
-	"library/databases"
+	"github.com/yangkaihello/go-sql-orm"
 )
 
 func SingleSqlIte(base databases.HandleMuster,dataset databases.HandleDataset) (databases.HandleMuster,databases.HandleDataset) {

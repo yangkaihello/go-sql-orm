@@ -2,29 +2,29 @@ package sqlite
 
 import (
 	"database/sql"
-	"library/databases"
+	"github.com/yangkaihello/go-sql-orm"
 )
 
 type datasetsMap map[string]databases.HandleDataset
 
 type TXExec struct {
-	db *sql.DB
-	tx *sql.Tx
+	db       *sql.DB
+	tx       *sql.Tx
 	datasets datasetsMap
 }
 
 func (this *TXExec) Start(config Config) *TXExec {
 	this.db = config.getDb()
-	this.tx,_ = this.db.Begin()
+	this.tx, _ = this.db.Begin()
 	this.datasets = make(datasetsMap)
 	return this
 }
 
-func (this *TXExec) Commit()  {
+func (this *TXExec) Commit() {
 	this.tx.Commit()
 }
 
-func (this *TXExec) Rollback()  {
+func (this *TXExec) Rollback() {
 	this.tx.Rollback()
 }
 

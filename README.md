@@ -38,23 +38,81 @@ func (this *Users) TableName() string {
 //连贯操作开始之前需要先介绍下 databases.Where 的使用
 //为了方便解耦把复杂的where条件单独定义一个结构体
 
-//初始化
+//初始化 where 需要一个WhereOption 对象
 var where databases.Where
 
-//一个用and 关联操作的where条件 会形成一个 (age = 18 AND age = 17) 的关联操作 
-where.WhereAnd([]databases.WhereOperation{{Key:"age",Value:"18",Handle:"="}，{Key:"age",Value:"17",Handle:"="}})
+//一个用and 关联操作的where条件 会形成一个 age = 18 AND age = 17 的关联操作 
 
-//一个用Or 关联操作的where条件 会形成一个 (age = 18 OR age = 17) 的关联操作 
-where.WhereOr([]databases.WhereOperation{{Key:"age",Value:"18",Handle:"="}，{Key:"age",Value:"17",Handle:"="}})
+where.add(option = databases.WhereOption{
+      Option: databases.DATABASE_WHERE_HANDLE_AND,
+      Operation: []databases.WhereOperation{
+         {
+             Key: "age",
+             Handle: "=",
+             Value: "18",
+         },
+         {
+             Key: "age",
+             Handle: "=",
+             Value: "17",
+         },
+     },
+  })
 
-//也可以使用where 自定义关联类型 (age = 18 AND age = 17) 的关联操作 
-where.Where([]databases.WhereOperation{{Key:"age",Value:"18",Handle:"="}，{Key:"age",Value:"17",Handle:"="}},databases.DATABASE_WHERE_HANDLE_AND)
+//一个用Or 关联操作的where条件 会形成一个 age = 18 OR age = 17 的关联操作 
 
-//如果存在复杂的关联操作，where也可以使用连贯操作 (`age` = 18 AND `age` = 17) OR `age` = 17
-//两个连贯操作的关联需要根据使用者自己来定义 Clean 的关联操作符，并且单个的条件WhereOr，WhereAnd是没有区别的，因为只有一个条件
-where.WhereAnd([]databases.WhereOperation{{Key:"age",Value:"18",Handle:"="},{Key:"age",Value:"17",Handle:"="}}).
-		WhereOr([]databases.WhereOperation{{Key:"age",Value:"17",Handle:"="}}).
-		Clean([]string{databases.DATABASE_WHERE_HANDLE_OR})
+where.add(databases.WhereOption{
+      Option: databases.DATABASE_WHERE_HANDLE_OR,
+      Operation: []databases.WhereOperation{
+          {
+              Key: "age",
+              Handle: "=",
+              Value: "18",
+          },
+          {
+              Key: "age",
+              Handle: "=",
+              Value: "17",
+          },
+     },
+  })
+
+//如果存在复杂的关联操作，where也可以使用连贯操作 `age` = 17 OR (`age` = 18 AND `age` = 17)
+//通过多层嵌套的关系来形成一个(`age` = 18 AND `age` = 17 ) 的括号条件
+
+where.add(databases.WhereOption{
+      Option: databases.DATABASE_WHERE_HANDLE_OR,
+      Operation: []databases.WhereOperation{
+          {
+              Key: "age",
+              Handle: "=",
+              Value: "17",
+          },
+     },
+  })
+
+where.add(databases.WhereOption{
+      Option: databases.DATABASE_WHERE_HANDLE_OR,
+      Operation: []databases.WhereOperation{
+          {
+              WhereOption: databases.WhereOption{
+                     Option: databases.DATABASE_WHERE_HANDLE_AND,
+                     Operation: []databases.WhereOperation{
+                        {
+                            Key: "age",
+                            Handle: "=",
+                            Value: "18",
+                        },
+                        {
+                            Key: "age",
+                            Handle: "=",
+                            Value: "17",
+                        },
+                    },
+                 }
+          },
+     },
+  })
 ```
 
 ### 连贯操作
@@ -69,7 +127,16 @@ var where databases.Where
 model := table.Init(new(sqlite.Connect))
 
 //定义一个简单的where条件
-where.WhereAnd([]databases.WhereOperation{{Key:"age",Value:"18",Handle:"="}}).
+where.add(databases.WhereOption{
+      Option: databases.DATABASE_WHERE_HANDLE_AND,
+      Operation: []databases.WhereOperation{
+          {
+              Key: "age",
+              Handle: "=",
+              Value: "18",
+          },
+     },
+  })
 
 //这样就算定义来一个简单的连贯操作,其中的内容会转换成如下的sql执行
 //SELECT `id`,`name` FROM users WHERE `age` = 18 ORDER BY `id` DESC 

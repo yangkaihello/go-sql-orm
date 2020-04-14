@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"library/databases"
-	"library/databases/factory"
+	"github.com/yangkaihello/go-sql-orm"
+	"github.com/yangkaihello/go-sql-orm/factory"
 	"reflect"
 	"strings"
 )
@@ -16,25 +16,25 @@ type Config struct {
 }
 
 func (this *Config) getDb() *sql.DB {
-	db,_ := sql.Open("sqlite3",this.Path)
+	db, _ := sql.Open("sqlite3", this.Path)
 	return db
 }
 
 type Connect struct {
 	TemplateTable interface{}
-	Config Config
+	Config        Config
 	db            *sql.DB
 	databases.HandleDataset
 	databases.HandleMuster
 }
 
-func (this *Connect) Start(config Config,table interface{}) *Connect {
+func (this *Connect) Start(config Config, table interface{}) *Connect {
 	switch reflect.TypeOf(table).Kind() {
 	case reflect.Struct:
 		table = &table
 	}
 	db := config.getDb()
-	ds,data := factory.SingleSqlIte(new(DSBase),new(Dataset))
+	ds, data := factory.SingleSqlIte(new(DSBase), new(Dataset))
 
 	//对象的映射
 	var templateTableType = reflect.TypeOf(table)
@@ -56,7 +56,7 @@ func (this *Connect) Start(config Config,table interface{}) *Connect {
 		ds.Table(tn.Call(nil)[0].String())
 	}
 
-	return &Connect{table,config,db,data,ds}
+	return &Connect{table, config, db, data, ds}
 }
 
 func (this *Connect) Select() *Connect {
@@ -71,15 +71,16 @@ func (this *Connect) Select() *Connect {
 	//判断是否需要设置结构体的字段
 	if len(this.GetTableField()) < 1 {
 		var f []string
-		for i := 0; i < templateTableValue.NumField() ; i++ {
+		for i := 0; i < templateTableValue.NumField(); i++ {
 			var field string
-			if	templateTableType.Field(i).Tag.Get(databases.TAG_NAME) != "" &&
-				templateTableType.Field(i).Tag.Get(databases.TAG_NAME) == databases.TAG_IGNORE {
+
+			if d, ok := templateTableType.Field(i).Tag.Lookup(databases.TAG_NAME); !ok || d == databases.TAG_IGNORE {
 				continue
 			}
+
 			if templateTableType.Field(i).Tag.Get(databases.TAG_NAME) != "" {
 				field = templateTableType.Field(i).Tag.Get(databases.TAG_NAME)
-			}else{
+			} else {
 				field = strings.ToLower(templateTableType.Field(i).Name)
 			}
 			f = append(f, field)
@@ -94,7 +95,7 @@ func (this *Connect) Select() *Connect {
 	return this
 }
 
-func (this *Connect) setDataset()  {
+func (this *Connect) setDataset() {
 	if err := this.db.Ping(); err != nil {
 		this.db = this.Config.getDb()
 	}
@@ -104,13 +105,32 @@ func (this *Connect) setDataset()  {
 }
 
 func (this *Connect) One() databases.DataTemplate {
-	data,_ := this.GetOne(this.GetSql(),this.GetPlaceholder())
+	data, _ := this.GetOne(this.GetSql(), this.GetPlaceholder())
 	return data
 }
 
 func (this *Connect) All() []databases.DataTemplate {
-	data,_ := this.GetAll(this.GetSql(),this.GetPlaceholder())
+	data, _ := this.GetAll(this.GetSql(), this.GetPlaceholder())
 	return data
+}
+
+func (this *Connect) Count() int64 {
+	this.setDataset()
+	this.SetDatasetStructTablesReset()
+	var fields = this.GetField()
+	var originField = this.GetOriginField()
+	//重新设置field
+	this.OriginFields([]string{"count(*) as count"}).Fields([]string{})
+	data, _ := this.GetOne(this.GetSql(), this.GetPlaceholder())
+	//还原field
+	this.Fields(fields).OriginFields(originField)
+	//log.Println(data,err)
+	if d, ok := data["count"]; ok {
+		return d.(int64)
+	} else {
+		return 0
+	}
+
 }
 
 func (this *Connect) Insert(template databases.DataTemplate) error {
@@ -125,28 +145,28 @@ func (this *Connect) Insert(template databases.DataTemplate) error {
 	var places []string
 	var values []string
 
-	for k,v := range template{
+	for k, v := range template {
 
 		var value string
 		switch v.(type) {
 		case int:
-			value = fmt.Sprintf("%d",v)
+			value = fmt.Sprintf("%d", v)
 		default:
-			value = fmt.Sprintf("%s",v)
+			value = fmt.Sprintf("%s", v)
 		}
 
-		fields = append(fields, fmt.Sprintf("`%s`",k))
+		fields = append(fields, fmt.Sprintf("`%s`", k))
 		places = append(places, "?")
 		values = append(values, value)
 
 	}
 
-	sqlString = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",this.GetTableName(),strings.Join(fields,","),strings.Join(places,","))
-	_,err := this.SetExec(sqlString,values)
+	sqlString = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", this.GetTableName(), strings.Join(fields, ","), strings.Join(places, ","))
+	_, err := this.SetExec(sqlString, values)
 	return err
 }
 
-func (this *Connect) Update(where databases.Where,template databases.DataTemplate) error {
+func (this *Connect) Update(where databases.Where, template databases.DataTemplate) error {
 	this.setDataset()
 
 	var sqlString string
@@ -154,17 +174,17 @@ func (this *Connect) Update(where databases.Where,template databases.DataTemplat
 	var fields []string
 	var values []string
 
-	if whereString = this.WhereMake(where); whereString == "" || len(template) == 0 {
+	if whereString = where.GetWhereString(); whereString == "" || len(template) == 0 {
 		return errors.New("databases.Where not OR databases.DataTemplate not")
 	}
 
-	for k,v := range template{
-		fields = append(fields, fmt.Sprintf("`%s` = ?",k))
+	for k, v := range template {
+		fields = append(fields, fmt.Sprintf("`%s` = ?", k))
 		values = append(values, reflect.ValueOf(v).String())
 	}
 
-	sqlString = fmt.Sprintf("UPDATE %s SET %s WHERE %s",this.GetTableName(),strings.Join(fields,","),whereString)
-	_,err := this.SetExec(sqlString,append(values,this.GetPlaceholder()...))
+	sqlString = fmt.Sprintf("UPDATE %s SET %s WHERE %s", this.GetTableName(), strings.Join(fields, ","), whereString)
+	_, err := this.SetExec(sqlString, append(values, this.GetPlaceholder()...))
 	return err
 }
 
@@ -173,34 +193,29 @@ func (this *Connect) Delete(where databases.Where) error {
 
 	var sqlString string
 	var whereString string
-	if whereString = this.WhereMake(where); whereString == "" {
+	if whereString = where.GetWhereString(); whereString == "" {
 		return errors.New("databases.Where not OR databases.DataTemplate not")
 	}
 
-	sqlString = fmt.Sprintf("DELETE FROM %s WHERE %s",this.GetTableName(),whereString)
-	_,err := this.SetExec(sqlString,this.GetPlaceholder())
+	sqlString = fmt.Sprintf("DELETE FROM %s WHERE %s", this.GetTableName(), whereString)
+	_, err := this.SetExec(sqlString, this.GetPlaceholder())
 	return err
 }
 
-func (this *Connect) Exec(sqlString string,placeholder... string) error {
+func (this *Connect) Exec(sqlString string, placeholder ...string) error {
 	this.setDataset()
 
-	_,err := this.SetExec(sqlString,placeholder)
+	_, err := this.SetExec(sqlString, placeholder)
 	return err
 }
 
-func (this *Connect) Query(sqlString string,placeholder... string) []databases.DataTemplate {
+func (this *Connect) Query(sqlString string, placeholder ...string) []databases.DataTemplate {
 	this.setDataset()
 
-	data,_ := this.GetAll(sqlString,placeholder)
+	data, _ := this.GetAll(sqlString, placeholder)
 	return data
 }
 
 func (this *Connect) Close() {
 	this.db.Close()
 }
-
-
-
-
-
