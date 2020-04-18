@@ -24,6 +24,7 @@ type Connect struct {
 	TemplateTable interface{}
 	Config        Config
 	db            *sql.DB
+	modelField map[string]string
 	databases.HandleDataset
 	databases.HandleMuster
 }
@@ -38,7 +39,8 @@ func (this *Connect) Start(config Config, table interface{}) *Connect {
 
 	//对象的映射
 	var templateTableType = reflect.TypeOf(table)
-	var templateTableValueFun = reflect.ValueOf(table)
+	var templateTableValue = reflect.ValueOf(table)
+	var templateTableValueElem = templateTableValue.Elem()
 
 	if templateTableType.Kind() == reflect.Ptr {
 		templateTableType = templateTableType.Elem()
@@ -49,19 +51,42 @@ func (this *Connect) Start(config Config, table interface{}) *Connect {
 	}
 
 	//func 定义表名 (验证是否存在func,返回值是否存在，返回值是否是string)
-	if tn := templateTableValueFun.MethodByName("TableName");
+	if tn := templateTableValue.MethodByName("TableName");
 		tn.IsValid() &&
 			tn.Type().NumOut() > 0 &&
 			tn.Type().Out(0).Kind() == reflect.String {
 		ds.Table(tn.Call(nil)[0].String())
 	}
 
-	return &Connect{table, config, db, data, ds}
+	//func 预定义加入时间
+	if tn := templateTableValue.MethodByName("CreatedAt");
+		tn.IsValid() &&
+			tn.Type().NumOut() > 0 &&
+			tn.Type().Out(0).Kind() == reflect.String {
+		//this.created_at = tn.Call(nil)[0].String()
+	}
+
+	var f  = map[string]string{}
+	for i := 0; i < templateTableValueElem.NumField(); i++ {
+		var field string
+
+		if d, ok := templateTableType.Field(i).Tag.Lookup(databases.TAG_NAME); !ok || d == databases.TAG_IGNORE {
+			continue
+		}
+
+		if templateTableType.Field(i).Tag.Get(databases.TAG_NAME) != "" {
+			field = templateTableType.Field(i).Tag.Get(databases.TAG_NAME)
+		} else {
+			field = strings.ToLower(templateTableType.Field(i).Name)
+		}
+		f[field] = ""
+	}
+
+	return &Connect{table, config, db,f, data, ds}
 }
 
 func (this *Connect) Select() *Connect {
 	//对象的映射
-	var templateTableValue = reflect.Indirect(reflect.ValueOf(this.TemplateTable))
 	var templateTableType = reflect.TypeOf(this.TemplateTable)
 
 	if templateTableType.Kind() == reflect.Ptr {
@@ -70,22 +95,11 @@ func (this *Connect) Select() *Connect {
 
 	//判断是否需要设置结构体的字段
 	if len(this.GetTableField()) < 1 {
-		var f []string
-		for i := 0; i < templateTableValue.NumField(); i++ {
-			var field string
-
-			if d, ok := templateTableType.Field(i).Tag.Lookup(databases.TAG_NAME); !ok || d == databases.TAG_IGNORE {
-				continue
-			}
-
-			if templateTableType.Field(i).Tag.Get(databases.TAG_NAME) != "" {
-				field = templateTableType.Field(i).Tag.Get(databases.TAG_NAME)
-			} else {
-				field = strings.ToLower(templateTableType.Field(i).Name)
-			}
-			f = append(f, field)
+		var field []string
+		for k,_ := range this.modelField {
+			field = append(field, k)
 		}
-		this.Fields(f)
+		this.Fields(field)
 	}
 
 	//操作结果集的配置
@@ -145,6 +159,33 @@ func (this *Connect) Insert(template databases.DataTemplate) error {
 	var places []string
 	var values []string
 
+	//对象的映射
+	var templateTableValue = reflect.ValueOf(this.TemplateTable)
+
+	//自动创建时间数据
+	_,CreatedAtOkOne := template["created_at"]
+	_,CreatedAtOkTwo := this.modelField["created_at"]
+	if !CreatedAtOkOne && CreatedAtOkTwo {
+		if tn := templateTableValue.MethodByName("CreatedAt");
+			tn.IsValid() &&
+				tn.Type().NumOut() > 0 &&
+				tn.Type().Out(0).Kind() == reflect.String {
+			template["created_at"] = tn.Call(nil)[0].String()
+		}
+	}
+
+	//自动创建时间数据
+	_,UpdatedAtOkOne := template["updated_at"]
+	_,UpdatedAtOkTwo := this.modelField["updated_at"]
+	if !UpdatedAtOkOne && UpdatedAtOkTwo {
+		if tn := templateTableValue.MethodByName("UpdatedAt");
+			tn.IsValid() &&
+				tn.Type().NumOut() > 0 &&
+				tn.Type().Out(0).Kind() == reflect.String {
+			template["updated_at"] = tn.Call(nil)[0].String()
+		}
+	}
+
 	for k, v := range template {
 
 		var value string
@@ -153,6 +194,9 @@ func (this *Connect) Insert(template databases.DataTemplate) error {
 			value = fmt.Sprintf("%d", v)
 		default:
 			value = fmt.Sprintf("%s", v)
+		}
+		if _,ok := this.modelField[k]; !ok {
+			continue
 		}
 
 		fields = append(fields, fmt.Sprintf("`%s`", k))
@@ -178,7 +222,25 @@ func (this *Connect) Update(where databases.Where, template databases.DataTempla
 		return errors.New("databases.Where not OR databases.DataTemplate not")
 	}
 
+	//对象的映射
+	var templateTableValue = reflect.ValueOf(this.TemplateTable)
+
+	//自动创建时间数据
+	_,UpdatedAtOkOne := template["updated_at"]
+	_,UpdatedAtOkTwo := this.modelField["updated_at"]
+	if !UpdatedAtOkOne && UpdatedAtOkTwo {
+		if tn := templateTableValue.MethodByName("UpdatedAt");
+			tn.IsValid() &&
+				tn.Type().NumOut() > 0 &&
+				tn.Type().Out(0).Kind() == reflect.String {
+			template["updated_at"] = tn.Call(nil)[0].String()
+		}
+	}
+
 	for k, v := range template {
+		if _,ok := this.modelField[k]; !ok {
+			continue
+		}
 		fields = append(fields, fmt.Sprintf("`%s` = ?", k))
 		values = append(values, reflect.ValueOf(v).String())
 	}
@@ -194,7 +256,7 @@ func (this *Connect) Delete(where databases.Where) error {
 	var sqlString string
 	var whereString string
 	if whereString = where.GetWhereString(); whereString == "" {
-		return errors.New("databases.Where not OR databases.DataTemplate not")
+		return errors.New("databases.Where not")
 	}
 
 	sqlString = fmt.Sprintf("DELETE FROM %s WHERE %s", this.GetTableName(), whereString)

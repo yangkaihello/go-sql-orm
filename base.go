@@ -33,11 +33,11 @@ type WhereOption struct {
 type Where struct {
 	placeholder    []string //最后的参数值
 	wheres         string
-	WhereInterface []interface{}
+	whereInterface []interface{}
 }
 
 func (this *Where) Add(wheres WhereOption) *Where {
-	this.WhereInterface = append(this.WhereInterface, append(this.whereMap(wheres), wheres.Option))
+	this.whereInterface = append(this.whereInterface, append(this.whereMap(wheres), wheres.Option))
 	//var whereString []string
 	//for _,value := range where {
 	//	whereString = append(whereString,fmt.Sprintf("`%s` %s ?",strings.Trim(value.Key,""),strings.Trim(value.Handle,"")))
@@ -49,7 +49,7 @@ func (this *Where) Add(wheres WhereOption) *Where {
 
 func (this *Where) GetWhereString() string {
 	this.wheres = ""
-	for _, value := range this.WhereInterface {
+	for _, value := range this.whereInterface {
 		this.whereString(value)
 	}
 	if this.wheres != "" {
